@@ -4,10 +4,15 @@ from django.utils.encoding import python_2_unicode_compatible
 from django.db import models
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
+from django.core.exceptions import ValidationError
 from model_utils.models import TimeStampedModel
 
 logger = logging.getLogger(__name__)
 PATH_SEP = '/'
+
+
+class ModelValidationError(ValidationError):
+    pass
 
 
 @python_2_unicode_compatible
@@ -22,6 +27,8 @@ class URL(TimeStampedModel):
 
     def clean(self):
         self.path = self.path.strip()
+        if not self.path.startswith(PATH_SEP):
+            raise ModelValidationError("Invalid URL root")
 
     def get_path_ancestry(self, include_self=False):
         parts = tuple(x for x in self.path.split(PATH_SEP) if x)
@@ -105,3 +112,36 @@ class URL(TimeStampedModel):
         ordering = ('-path',)
         verbose_name = _("URL")
         verbose_name_plural = _("URLs")
+        db_table = 'churlish_url'
+
+
+def validate_redirect_target(value):
+    if value.startswith(('http://', 'https://')):
+        return True
+    if value.startswith('//'):
+        return True
+    if value.startswith(('.', '/.')):
+        raise ModelValidationError('URL may not be relative')
+    if value.startswith('/'):
+        return True
+    raise ModelValidationError('URL may not be relative')
+
+
+@python_2_unicode_compatible
+class URLRedirect(models.Model):
+    url = models.OneToOneField('churlish.URL')
+    target = models.CharField(max_length=2048,
+                              validators=[validate_redirect_target])
+
+    def __str__(self):
+        return self.target
+
+    def clean(self):
+        self.target = self.target.strip()
+        if len(self.target) < 1:
+            raise ModelValidationError("Invalid target")
+
+    class Meta:
+        verbose_name = _("Redirect")
+        verbose_name_plural = _("Redirects")
+        db_table = "churlish_urlredirect"
