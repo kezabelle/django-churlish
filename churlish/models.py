@@ -7,6 +7,7 @@ from django.utils.translation import ugettext_lazy as _
 from django.core.exceptions import ValidationError
 from model_utils.models import TimeStampedModel
 
+
 logger = logging.getLogger(__name__)
 PATH_SEP = '/'
 
@@ -106,7 +107,15 @@ class URL(TimeStampedModel):
         return self.path == PATH_SEP
 
     def is_sibling_of(self, node):
-        raise NotImplementedError
+        other = list(x for x in node.path.split(PATH_SEP) if x)
+        me = list(x for x in self.path.split(PATH_SEP) if x)
+        other_len = len(other)
+        me_len = len(me)
+        if other_len == me_len and (me_len > 0 and other_len > 0):
+            other.pop()
+            me.pop()
+            return other == me
+        return False
 
     class Meta:
         ordering = ('-path',)
