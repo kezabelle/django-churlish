@@ -86,6 +86,20 @@ class URL(TimeStampedModel):
     @classmethod
     def get_root_nodes(cls):
         return cls.objects.filter(path=PATH_SEP)
+        
+    @classmethod
+    def get_first_root_node(cls):
+        try:
+            return cls.get_root_nodes()[0]
+        except IndexError:
+            return None
+        
+    @classmethod
+    def get_last_root_node(cls):
+        try:
+            return cls.get_root_nodes()[0]
+        except IndexError:
+            return None
 
     def get_root(self):
         return self.__class__.objects.get(path=PATH_SEP)
