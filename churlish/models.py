@@ -1,15 +1,31 @@
 import logging
 from itertools import chain
+from datetime import timedelta
+from django import VERSION
 from django.utils.encoding import python_2_unicode_compatible
 from django.db import models
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 from django.core.exceptions import ValidationError
 from model_utils.models import TimeStampedModel
+from .querying import VisbilityManager
+
+try:
+    from django.utils.timezone import now
+except ImportError:
+    from datetime import datetime
+    now = datetime.now
 
 
 logger = logging.getLogger(__name__)
 PATH_SEP = '/'
+DJANGO_VERSION = VERSION[0:3]
+publish_label = _("publishing date")
+publish_help = _("the date and time on which this object should be visible on "
+                 "the website.")
+unpublish_label = _("publishing end date")
+unpublish_help = _("if filled in, this date and time are when this object "
+                   "will cease being available.")
 
 
 class ModelValidationError(ValidationError):
@@ -156,7 +172,7 @@ def validate_redirect_target(value):
 
 
 @python_2_unicode_compatible
-class URLRedirect(models.Model):
+class URLRedirect(TimeStampedModel):
     url = models.OneToOneField('churlish.URL')
     target = models.CharField(max_length=2048,
                               validators=[validate_redirect_target])
@@ -173,3 +189,54 @@ class URLRedirect(models.Model):
         verbose_name = _("Redirect")
         verbose_name_plural = _("Redirects")
         db_table = "churlish_urlredirect"
+
+
+@python_2_unicode_compatible
+class URLVisible(TimeStampedModel):
+    url = models.OneToOneField('churlish.URL')
+    publish_on = models.DateTimeField(default=now,
+                                      verbose_name=publish_label,
+                                      help_text=publish_help)
+    unpublish_on = models.DateTimeField(default=None, blank=True, null=True,
+                                        verbose_name=unpublish_label,
+                                        help_text=unpublish_help)
+    objects = VisbilityManager()
+
+    def __str__(self):
+        return 'from: {!s}, to: {!s}'.format(self.publish_on,
+                                             self.unpublish_on)
+
+    def _get_is_published(self):
+        """
+        :return: Whether or not this object is currently visible
+        :rtype: boolean
+        """
+        current = now()
+        if self.unpublish_on is not None:
+            # maybe self.unpublish_on >= now >= self.publish_on ???
+            return self.unpublish_on >= current and self.publish_on <= current
+        else:
+            return self.publish_on <= current
+
+    def _set_is_published(self, value):
+        current = now() - timedelta(seconds=1)
+        if value:
+            self.publish_on = current
+            self.unpublish_on = None
+        else:
+            self.publish_on = current
+            self.unpublish_on = current
+
+    is_published = property(_get_is_published, _set_is_published)
+
+    def unpublish(self, using=None):
+        self.unpublish_on = now() - timedelta(seconds=1)
+        save_kwargs = {'using': using}
+        if DJANGO_VERSION > (1, 5, 0):
+            save_kwargs.update(update_fields=['unpublish_on'])
+        return self.save(**save_kwargs)
+
+    class Meta:
+        verbose_name = _("Visibility")
+        verbose_name_plural = _("Visibility")
+        db_table = 'churlish_urlvisible'
