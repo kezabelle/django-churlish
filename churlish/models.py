@@ -185,6 +185,12 @@ class URLRedirect(TimeStampedModel):
         if len(self.target) < 1:
             raise ModelValidationError("Invalid target")
 
+    def get_absolute_url(self):
+        return self.target
+
+    def is_permanent(self):
+        return True
+
     class Meta:
         verbose_name = _("Redirect")
         verbose_name_plural = _("Redirects")

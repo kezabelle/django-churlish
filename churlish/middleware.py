@@ -1,6 +1,7 @@
 import logging
-from django.http import Http404
-from .models import URL, URLVisible
+from django.http import (Http404, HttpResponseRedirect,
+                         HttpResponsePermanentRedirect)
+from .models import URL, URLVisible, URLRedirect
 
 try:
     from django.utils.timezone import now
@@ -56,3 +57,20 @@ class IsImperfectURLVisible(IsVisible):
         best_url = (URLVisible.objects.filter(url__path__in=possibilities)
                     .order_by('-url__path').first())
         return best_url
+
+
+class NeedsRedirecting(object):
+    def get_object(self, request):
+        try:
+            URLRedirect.objects.get(url__path=request.path)
+        except URLRedirect.DoesNotExist:
+            return None
+
+    def process_request(self, request):
+        obj = self.get_object(request=request)
+        if obj is not None:
+            location = obj.get_absolute_url()
+            if obj.is_permanent:
+                return HttpResponsePermanentRedirect(location)
+            return HttpResponseRedirect(location)
+        return None
