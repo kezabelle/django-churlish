@@ -1,4 +1,5 @@
 import logging
+from collections import namedtuple
 from django.http import (Http404, HttpResponseRedirect,
                          HttpResponsePermanentRedirect)
 from .models import URL, URLVisible, URLRedirect
@@ -11,6 +12,48 @@ except ImportError:
 
 
 logger = logging.getLogger(__name__)
+
+
+ChurlishData = namedtuple('ChurlishData', 'perfecti imperfect all path')
+
+
+class RequestURL(object):
+    def get_prefetch_related(self):
+        return ()
+
+    def get_select_related(self):
+        return ()
+
+    def get_query_set(self, request, instance):
+        prefetches = self.get_prefetch_related()
+        selects = self.get_select_related()
+        qs = instance.get_ancestors(include_self=True)
+        if selects:
+            qs = qs.select_related(*selects)
+        if prefetches:
+            qs = qs.prefetch_related(*prefetches)
+        return qs.iterator()
+
+    def get_or_set_url(self, request):
+        request_attr = getattr(request, 'churlish', None)
+        if request_attr is not None:
+            return request_attr
+        url = URL(path=request.path)
+        all_urls = tuple(self.get_query_set(request=request, instance=url))
+
+        imperfect = None
+        if all_urls:
+            imperfect = tuple(x for x in all_urls if x.is_ancestor_of(url))
+
+        try:
+            perfect = tuple(x for x in all_urls if x.is_same_as(url))
+        except StopIteration:
+            perfect = None
+
+        outdata = ChurlishData(perfect=perfect, imperfect=imperfect,
+                               all=all_urls, path=request.path)
+        request.churlish = outdata
+        return outdata
 
 
 class IsVisible(object):

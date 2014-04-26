@@ -67,8 +67,8 @@ class URL(TimeStampedModel):
     def depth(self):
         return self.get_depth()
 
-    def get_ancestors(self):
-        parent_urls = tuple(self.get_path_ancestry())
+    def get_ancestors(self, include_self=False):
+        parent_urls = tuple(self.get_path_ancestry(include_self=include_self))
         if not parent_urls:
             return self.__class__.objects.none()
         return self.__class__.objects.filter(path__in=parent_urls)
@@ -151,6 +151,9 @@ class URL(TimeStampedModel):
 
     def is_child_node(self):
         return not self.is_root()
+
+    def is_same_as(self, node):
+        return self.path == node.path
 
     class Meta:
         ordering = ('-path',)
