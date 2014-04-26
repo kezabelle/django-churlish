@@ -44,7 +44,7 @@ class URL(TimeStampedModel):
 
     def clean(self):
         self.path = self.path.strip()
-        if not self.path.startswith(PATH_SEP):
+        if self.path and not self.path.startswith(PATH_SEP):
             raise ModelValidationError("Invalid URL root")
 
     def get_path_ancestry(self, include_self=False):
