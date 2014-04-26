@@ -45,6 +45,8 @@ class URL(TimeStampedModel):
     def get_depth(self):
         return len(tuple(self.get_path_ancestry(include_self=True)))
 
+    get_level = get_depth
+
     @cached_property
     def depth(self):
         return self.get_depth()
@@ -86,14 +88,14 @@ class URL(TimeStampedModel):
     @classmethod
     def get_root_nodes(cls):
         return cls.objects.filter(path=PATH_SEP)
-        
+
     @classmethod
     def get_first_root_node(cls):
         try:
             return cls.get_root_nodes()[0]
         except IndexError:
             return None
-        
+
     @classmethod
     def get_last_root_node(cls):
         try:
@@ -130,6 +132,9 @@ class URL(TimeStampedModel):
             me.pop()
             return other == me
         return False
+
+    def is_child_node(self):
+        return not self.is_root()
 
     class Meta:
         ordering = ('-path',)
