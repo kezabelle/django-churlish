@@ -37,7 +37,7 @@ class URL(TimeStampedModel):
     """
     This implements much of the django-treebeard model API
     """
-    path = models.CharField(max_length=2048, primary_key=True)
+    path = models.CharField(max_length=2048)
 
     def __str__(self):
         return self.path
