@@ -122,14 +122,27 @@ class URL(TimeStampedModel):
     def get_root(self):
         return self.__class__.objects.get(path=PATH_SEP)
 
+    def is_ancestor_of(self, node):
+        """
+        ???
+        """
+        url_namespace = node.path.startswith(self.path)
+        i_am_shorter = len(self.path) < len(node.path)
+        return all((url_namespace, i_am_shorter))
+
     def is_child_of(self, node):
+        """
+        If this node starts with the path of the other node,
+        and the other node's path is *SHORTER*, it is a child
+        """
         prefix = self.path.startswith(node.path)
-        longer = len(node.path) > len(self.path)
+        longer = len(node.path) < len(self.path)
         return all((prefix, longer))
 
     def is_descendant_of(self, node):
         """
-        opposite of is_child_of
+        If the other node starts with our path, and our path
+        is longer, we are a descendant
         """
         prefix = node.path.startswith(self.path)
         longer = len(self.path) > len(node.path)
