@@ -8,15 +8,20 @@ class RedirectInline(admin.StackedInline):
     extra = 0
     max_num = 1
 
+    def get_urladmin_display(self, obj):
+        return ''
 
 class VisibleInline(admin.StackedInline):
     model = URLVisible
     extra = 0
     max_num = 1
 
+    def get_urladmin_display(self, obj):
+        return ''
+
 
 class URLAdmin(admin.ModelAdmin):
-    list_display = ['path', 'modified']
+    list_display = ['path']
     list_display_links = ['path']
     actions = None
     search_fields = ['^path']
@@ -41,4 +46,12 @@ class URLAdmin(admin.ModelAdmin):
                      if hasattr(x, 'related'))
         return accessors
 
+    def get_queryset(self, *args, **kwargs):
+        relations = tuple(self.get_runtime_relations())
+        qs = super(URLAdmin, self).get_queryset(*args, **kwargs)
+        return qs.select_related(*relations)
+
+    def get_list_display(self, *args, **kwargs):
+        relations = tuple(self.get_runtime_relations())
+        return ('path', 'modified') + relations
 admin.site.register(URL, URLAdmin)
