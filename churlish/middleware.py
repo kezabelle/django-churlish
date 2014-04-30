@@ -1,7 +1,10 @@
+import re
 import logging
 from collections import namedtuple
+from django.utils.functional import cached_property
 from django.http import (Http404, HttpResponseRedirect,
                          HttpResponsePermanentRedirect)
+from django.core.urlresolvers import reverse_lazy, NoReverseMatch
 from .models import URL, URLVisible, URLRedirect
 
 try:
@@ -55,8 +58,32 @@ class RequestURL(object):
         request.churlish = outdata
         return outdata
 
+    def get_exclusions(self):
+        try:
+            admin_root = reverse_lazy('admin:index')
+        except NoReverseMatch:
+            admin_root = None
+        static_root = getattr(settings, 'STATIC_URL', None)
+        media_root = getattr(settings, 'MEDIA_URL', None)
+        for exclude in (admin_root, static_root, media_root):
+            if exclude:
+                yield r'^{exclude!s}'.format(exclude=exclude)
+        for configured_exclude in getattr(settings, 'CHURLISH_EXCLUDES', ()):
+            if configured_exclude:
+                yield configured_exclude
 
-class IsVisible(object):
+    @cached_property
+    def compiled_exclusions(self):
+        return tuple(re.compile(x, re.VERBOSE) for x in self.get_exclusions())
+
+    def is_excluded(self, request):
+        for exclusion in self.compiled_exclusions:
+            if exclusion.search(request.path):
+                return True
+        return False
+
+
+class IsVisible(RequestURL):
     """
     Allows for '/a/b/c/' to be hidden only when it is explicitly marked
     as unpublished
@@ -65,12 +92,14 @@ class IsVisible(object):
         raise NotImplementedError
 
     def process_request(self, request):
+        if self.is_excluded():
+            return None
         url = self.get_object()
         if url is None:
             return None  # no match, so continue with other middlewares
         return self.handle_unpublished(url=url, request=request)
 
-    def is_unpublished(self, url, request):
+    def handle_unpublished(self, url, request):
         if not url.is_pubished:
             msg = ("URL (pk: {url}) has publishing information (pk: {vis}) "
                    "which prevents it from being displayed now "
@@ -82,8 +111,11 @@ class IsVisible(object):
 
 class IsPerfectURLVisible(IsVisible):
     def get_object(self, request):
+        url = self.get_or_set_url(request=request).perfect
+        if url is None:
+            return
         try:
-            return URLVisible.objects.get(url__path=request.path)
+            return url.urlvisible
         except URLVisible.DoesNotExist:
             return None
 
@@ -94,6 +126,9 @@ class IsImperfectURLVisible(IsVisible):
     published
     """
     def get_object(self, request):
+        url = self.get_or_set_url(request=request).imperfect
+        if url is None:
+            return None
         url = URL(path=request.path)
         url.full_clean()
         possibilities = url.get_path_ancestry(include_self=True)
@@ -102,14 +137,17 @@ class IsImperfectURLVisible(IsVisible):
         return best_url
 
 
-class NeedsRedirecting(object):
+class NeedsRedirecting(RequestURL):
     def get_object(self, request):
+        url = self.get_or_set_url(request=request).imperfect
         try:
-            URLRedirect.objects.get(url__path=request.path)
+            return url.urlredirect
         except URLRedirect.DoesNotExist:
             return None
 
     def process_request(self, request):
+        if self.is_excluded():
+            return None
         obj = self.get_object(request=request)
         if obj is not None:
             location = obj.get_absolute_url()
