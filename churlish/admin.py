@@ -10,7 +10,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.contrib import admin
 from .models import (URL, URLRedirect, URLVisible, SimpleAccessRestriction,
                      GroupAccessRestriction, UserAccessRestriction)
-
+from .admin_filters import RedirectFilter
 
 class URLInline(admin.StackedInline):
     extra = 0
@@ -22,6 +22,7 @@ class URLInline(admin.StackedInline):
 
     def get_urladmin_display(self, obj, relation_name):
         raise NotImplementedError
+
 
 
 class RedirectInline(URLInline):
@@ -38,6 +39,9 @@ class RedirectInline(URLInline):
         return len(related_instance.get_absolute_url()) > 0
     get_urladmin_display.short_description = _("Redirect")
     get_urladmin_display.boolean = True
+
+    def get_urladmin_filter_cls(self, *args, **kwargs):
+        return RedirectFilter
 
 
 class VisibleInline(URLInline):
@@ -126,18 +130,22 @@ class URLAdmin(admin.ModelAdmin):
                      if hasattr(x, 'related'))
         return accessors
 
-    def get_queryset(self, *args, **kwargs):
-        relations = tuple(self.get_runtime_relations())
-        qs = super(URLAdmin, self).get_queryset(*args, **kwargs)
-        return qs.select_related(*relations)
-
-    def get_list_display(self, *args, **kwargs):
+    def get_runtime_relations_and_inlines(self):
         relations = tuple(self.get_runtime_relations())
         zipped_together = zip_longest(self.inlines[:], relations,
                                       fillvalue=None)
         models_and_inlines = ((inline, inline.model, relation)
                               for inline, relation in zipped_together
                               if inline is not None and relation is not None)
+        return models_and_inlines
+
+    def get_queryset(self, *args, **kwargs):
+        relations = tuple(self.get_runtime_relations())
+        qs = super(URLAdmin, self).get_queryset(*args, **kwargs)
+        return qs.select_related(*relations)
+
+    def get_list_display(self, *args, **kwargs):
+        models_and_inlines = self.get_runtime_relations_and_inlines()
         instantiated = ((inline(model, self.admin_site), relation)
                         for inline, model, relation in models_and_inlines
                         if hasattr(inline, 'get_urladmin_display')
@@ -145,4 +153,17 @@ class URLAdmin(admin.ModelAdmin):
         called = tuple(inline.get_urladmin_display_func(relation)
                        for inline, relation in instantiated)
         return ('path', 'modified') + called
+
+    def get_list_filter(self, *args, **kwargs):
+        models_and_inlines = self.get_runtime_relations_and_inlines()
+        instantiated = ((inline(model, self.admin_site), relation)
+                        for inline, model, relation in models_and_inlines
+                        if hasattr(inline, 'get_urladmin_filter_cls'))
+        classes = (inline.get_urladmin_filter_cls(*args, **kwargs)
+                   for inline, relation in instantiated)
+        self.list_filter = tuple(classes)
+        return self.list_filter
+
+    def lookup_allowed(self, lookup, value):
+        return True
 admin.site.register(URL, URLAdmin)
