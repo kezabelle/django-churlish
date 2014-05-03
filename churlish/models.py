@@ -296,7 +296,8 @@ class SimpleAccessRestriction(TimeStampedModel):
     is_authenticated = models.BooleanField(default=False,
                                            verbose_name=_("Login required"))
     is_staff = models.BooleanField(default=False, verbose_name=_("Only staff"))
-    is_superuser = models.BooleanField(default=False, verbose_name=_("Only administrators"))
+    is_superuser = models.BooleanField(default=False,
+                                       verbose_name=_("Only administrators"))
 
     def has_restriction(self):
         return self.is_authenticated or self.is_staff or self.is_superuser
