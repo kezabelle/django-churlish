@@ -1,6 +1,7 @@
 from itertools import chain
 from django.contrib import admin
-from .models import URL, URLRedirect, URLVisible
+from .models import (URL, URLRedirect, URLVisible, SimpleAccessRestriction,
+                     GroupAccessRestriction, UserAccessRestriction)
 
 
 class RedirectInline(admin.StackedInline):
@@ -11,10 +12,35 @@ class RedirectInline(admin.StackedInline):
     def get_urladmin_display(self, obj):
         return ''
 
+
 class VisibleInline(admin.StackedInline):
     model = URLVisible
     extra = 0
     max_num = 1
+
+    def get_urladmin_display(self, obj):
+        return ''
+
+
+class SimpleAccessInline(admin.StackedInline):
+    model = SimpleAccessRestriction
+    extra = 1
+
+    def get_urladmin_display(self, obj):
+        return ''
+
+
+class GroupAccessInline(admin.StackedInline):
+    model = GroupAccessRestriction
+    extra = 0
+
+    def get_urladmin_display(self, obj):
+        return ''
+
+
+class UserAccessInline(admin.StackedInline):
+    model = UserAccessRestriction
+    extra = 0
 
     def get_urladmin_display(self, obj):
         return ''
@@ -26,7 +52,8 @@ class URLAdmin(admin.ModelAdmin):
     actions = None
     search_fields = ['^path']
     ordering = ('-modified',)
-    inlines = [VisibleInline, RedirectInline]
+    inlines = [VisibleInline, SimpleAccessInline, GroupAccessInline,
+               UserAccessInline, RedirectInline]
 
     def get_runtime_relations(self):
         """

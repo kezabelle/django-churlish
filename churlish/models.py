@@ -7,6 +7,7 @@ from django.db import models
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 from django.core.exceptions import ValidationError
+from django.conf import settings
 from model_utils.models import TimeStampedModel
 from .querying import VisbilityManager
 
@@ -262,3 +263,36 @@ class URLVisible(TimeStampedModel):
         verbose_name = _("Visibility")
         verbose_name_plural = _("Visibility")
         db_table = 'churlish_urlvisible'
+
+
+@python_2_unicode_compatible
+class SimpleAccessRestriction(TimeStampedModel):
+    url = models.OneToOneField('churlish.URL')
+    is_authenticated = models.BooleanField(default=False,
+                                           verbose_name=_("Login required"))
+    is_staff = models.BooleanField(default=False, verbose_name=_("Only staff"))
+    is_superuser = models.BooleanField(default=False, verbose_name=_("Only administrators"))
+
+    def has_restriction(self):
+        return self.is_authenticated or self.is_staff or self.is_superuser
+
+    class Meta:
+        db_table = 'churlish_url_access'
+
+
+@python_2_unicode_compatible
+class GroupAccessRestriction(TimeStampedModel):
+    url = models.ForeignKey('churlish.URL')
+    group = models.ForeignKey('auth.Group')
+
+    class Meta:
+        db_table = 'churlish_url_accessgroup'
+
+
+@python_2_unicode_compatible
+class UserAccessRestriction(TimeStampedModel):
+    url = models.ForeignKey('churlish.URL')
+    user = models.ForeignKey(getattr(settings, 'AUTH_USER_MODEL', 'auth.User'))
+
+    class Meta:
+        db_table = 'churlish_url_accessuser'
