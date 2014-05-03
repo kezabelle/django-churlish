@@ -69,6 +69,8 @@ class URL(TimeStampedModel):
         return self.get_depth()
 
     def get_ancestors(self, include_self=False):
+        if self.is_root():
+            return self.__class__.objects.none()
         parent_urls = tuple(self.get_path_ancestry(include_self=include_self))
         if not parent_urls:
             return self.__class__.objects.none()
@@ -84,6 +86,8 @@ class URL(TimeStampedModel):
         return self.get_descendants().count()
 
     def get_parent(self):
+        if self.is_root():
+            return None
         parent_urls = tuple(self.get_path_ancestry())
         if not parent_urls:
             return None
