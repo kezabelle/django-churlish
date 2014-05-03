@@ -3,12 +3,20 @@ from django.core.exceptions import ValidationError
 from django.contrib.admin.options import IncorrectLookupParameters
 from django.utils.translation import ugettext_lazy as _
 from django.db.models.fields import BooleanField
+from django.db.models import Q
+
+try:
+    from django.utils.timezone import now
+except ImportError:
+    from datetime import datetime
+    now = datetime.now
+
 from .models import SimpleAccessRestriction
 
 
 class RedirectFilter(SimpleListFilter):
     title = _("Redirect")
-    parameter_name = 'urlredirect__isnull'
+    parameter_name = '_redirect'
 
     def lookups(self, request, model_admin):
         return (
@@ -20,7 +28,7 @@ class RedirectFilter(SimpleListFilter):
         if self.parameter_name in self.used_parameters:
             param = self.used_parameters[self.parameter_name]
             bool_val = True if param == '1' else False
-            final_qs_val = {self.parameter_name: bool_val}
+            final_qs_val = {'urlredirect__isnull': bool_val}
             try:
                 return queryset.filter(**final_qs_val)
             except ValidationError as e:
@@ -30,7 +38,7 @@ class RedirectFilter(SimpleListFilter):
 
 class AccessFilter(SimpleListFilter):
     title = _("Access Restiction")
-    parameter_name = 'access'
+    parameter_name = '_access'
 
     def lookups(self, request, model_admin):
         fields = SimpleAccessRestriction._meta.get_fields_with_model()
@@ -47,4 +55,42 @@ class AccessFilter(SimpleListFilter):
                 return queryset.filter(**final_qs_val)
             except ValidationError as e:
                 raise IncorrectLookupParameters(e)
+        return queryset
+
+
+class PublishedFilter(SimpleListFilter):
+    title = _("Published status")
+    parameter_name = '_is_published'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('0', _('Unpublished')),
+            ('1', _('Published'))
+        )
+
+    def queryset(self, request, queryset):
+        if self.parameter_name in self.used_parameters:
+            param = self.used_parameters[self.parameter_name]
+            is_published = True if param == '1' else False
+            current = now()
+            if not is_published:
+                try:
+                    return queryset.filter(
+                        Q(urlvisible__unpublish_on__lte=current) |
+                        Q(urlvisible__publish_on__gte=current))
+                except ValidationError as e:
+                    raise IncorrectLookupParameters(e)
+            else:
+                doesnt_exist = Q(urlvisible__isnull=True)
+                maybe_published = (
+                    Q(urlvisible__unpublish_on__gte=current) |
+                    Q(urlvisible__unpublish_on__isnull=True)
+                )
+                definitely_published = Q(urlvisible__publish_on__lte=current)
+                published_together = maybe_published & definitely_published
+                all_together = doesnt_exist | published_together
+                try:
+                    return queryset.filter(all_together)
+                except ValidationError as e:
+                    raise IncorrectLookupParameters(e)
         return queryset

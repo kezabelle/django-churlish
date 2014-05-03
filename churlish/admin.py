@@ -10,7 +10,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.contrib import admin
 from .models import (URL, URLRedirect, URLVisible, SimpleAccessRestriction,
                      GroupAccessRestriction, UserAccessRestriction)
-from .admin_filters import RedirectFilter, AccessFilter
+from .admin_filters import RedirectFilter, AccessFilter, PublishedFilter
 
 
 class URLInline(admin.StackedInline):
@@ -60,9 +60,13 @@ class VisibleInline(URLInline):
             related_instance = None
         if related_instance is None:
             return True
-        return not related_instance.is_published
+        return related_instance.is_published
     get_urladmin_display.short_description = _("Published")
     get_urladmin_display.boolean = True
+
+
+    def get_urladmin_filter_cls(self, *args, **kwargs):
+        return PublishedFilter
 
 
 class SimpleAccessInline(URLInline):
