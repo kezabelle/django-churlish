@@ -10,7 +10,8 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.contrib import admin
 from .models import (URL, URLRedirect, URLVisible, SimpleAccessRestriction,
                      GroupAccessRestriction, UserAccessRestriction)
-from .admin_filters import RedirectFilter, AccessFilter, PublishedFilter
+from .admin_filters import (RedirectFilter, AccessFilter, PublishedFilter,
+                            GroupFilter, UserFilter)
 
 
 class URLInline(admin.StackedInline):
@@ -98,6 +99,9 @@ class GroupAccessInline(URLInline):
     get_urladmin_display.short_description = _("Group Restricted")
     get_urladmin_display.boolean = True
 
+    def get_urladmin_filter_cls(self, *args, **kwargs):
+        return GroupFilter
+
 
 class UserAccessInline(URLInline):
     model = UserAccessRestriction
@@ -109,6 +113,9 @@ class UserAccessInline(URLInline):
         return related_instance.exists()
     get_urladmin_display.short_description = _("User Restricted")
     get_urladmin_display.boolean = True
+
+    def get_urladmin_filter_cls(self, *args, **kwargs):
+        return UserFilter
 
 
 class URLAdmin(admin.ModelAdmin):

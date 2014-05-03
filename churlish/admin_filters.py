@@ -11,7 +11,8 @@ except ImportError:
     from datetime import datetime
     now = datetime.now
 
-from .models import SimpleAccessRestriction
+from .models import (SimpleAccessRestriction, GroupAccessRestriction,
+                     UserAccessRestriction)
 
 
 class RedirectFilter(SimpleListFilter):
@@ -59,7 +60,7 @@ class AccessFilter(SimpleListFilter):
 
 
 class PublishedFilter(SimpleListFilter):
-    title = _("Published status")
+    title = _("Publishing Status")
     parameter_name = '_is_published'
 
     def lookups(self, request, model_admin):
@@ -93,4 +94,40 @@ class PublishedFilter(SimpleListFilter):
                     return queryset.filter(all_together)
                 except ValidationError as e:
                     raise IncorrectLookupParameters(e)
+        return queryset
+
+
+class GroupFilter(SimpleListFilter):
+    title = _("Group Restriction")
+    parameter_name = '_group_pk'
+
+    def lookups(self, request, model_admin):
+        group_cls = GroupAccessRestriction.group.field.rel.to
+        return tuple((x.pk, x.name) for x in group_cls.objects.all().iterator())
+
+    def queryset(self, request, queryset):
+        if self.parameter_name in self.used_parameters:
+            param = self.used_parameters[self.parameter_name]
+            try:
+                return queryset.filter(groupaccessrestriction__group__pk=param)
+            except ValidationError as e:
+                raise IncorrectLookupParameters(e)
+        return queryset
+
+
+class UserFilter(SimpleListFilter):
+    title = _("User Restriction")
+    parameter_name = '_user_pk'
+
+    def lookups(self, request, model_admin):
+        user_cls = UserAccessRestriction.user.field.rel.to
+        return tuple((x.pk, x.name) for x in user_cls.objects.all().iterator())
+
+    def queryset(self, request, queryset):
+        if self.parameter_name in self.used_parameters:
+            param = self.used_parameters[self.parameter_name]
+            try:
+                return queryset.filter(useraccessrestriction__user__pk=param)
+            except ValidationError as e:
+                raise IncorrectLookupParameters(e)
         return queryset
