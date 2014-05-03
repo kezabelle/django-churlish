@@ -97,14 +97,35 @@ class URL(TimeStampedModel):
         except self.__class__.DoesNotExist:
             return None
 
+    def get_qs_extra(self, target_depth):
+        field_obj = self._meta.get_field_by_name('path')
+        column = field_obj[0].db_column
+        params = [column, column, PATH_SEP, PATH_SEP, target_depth]
+        qs_extra = ["(LENGTH(%s) - LENGTH(REPLACE(%s, %s, ''))) / LENGTH(%s) = %d"]
+        return {
+            'where': qs_extra,
+            'params': params,
+        }
+
     def get_siblings(self):
-        raise NotImplementedError
+        if self.is_root():
+            return self.__class__.objects.none()
+        ancestors = tuple(self.get_path_ancestry(include_self=False))
+        nearest_ancestor = ancestors[-1]
+        slash_count = self.path.count(PATH_SEP)
+        extras = self.get_qs_extra(target_depth=slash_count)
+        return (self.__class__.objects
+                .filter(path__startswith=nearest_ancestor)
+                .extra(**extras))
 
     def get_children(self):
-        raise NotImplementedError
+        slash_count = self.path.count(PATH_SEP)
+        children_count = slash_count + 1
+        extras = self.get_qs_extra(target_depth=children_count)
+        return self.get_descendants().extra(**extras)
 
     def get_children_count(self):
-        raise NotImplementedError
+        return self.get_children.count()
 
     @classmethod
     def get_root_nodes(cls):
