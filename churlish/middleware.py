@@ -1,6 +1,7 @@
 import re
 import logging
 from collections import namedtuple
+from django.conf import settings
 from django.utils.functional import cached_property
 from django.http import (Http404, HttpResponseRedirect,
                          HttpResponsePermanentRedirect)
@@ -17,7 +18,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-ChurlishData = namedtuple('ChurlishData', 'perfecti imperfect all path')
+URLData = namedtuple('URLData', 'perfect imperfect all path')
 
 
 class RequestURL(object):
@@ -35,27 +36,21 @@ class RequestURL(object):
             qs = qs.select_related(*selects)
         if prefetches:
             qs = qs.prefetch_related(*prefetches)
-        return qs.iterator()
+        return qs
 
-    def get_or_set_url(self, request):
-        request_attr = getattr(request, 'churlish', None)
-        if request_attr is not None:
-            return request_attr
+    def get_url_data(self, request):
         url = URL(path=request.path)
-        all_urls = tuple(self.get_query_set(request=request, instance=url))
+        all_urls = tuple(
+            self.get_query_set(request=request, instance=url).iterator())
 
         imperfect = None
+        perfect = None
         if all_urls:
             imperfect = tuple(x for x in all_urls if x.is_ancestor_of(url))
-
-        try:
             perfect = tuple(x for x in all_urls if x.is_same_as(url))
-        except StopIteration:
-            perfect = None
 
-        outdata = ChurlishData(perfect=perfect, imperfect=imperfect,
-                               all=all_urls, path=request.path)
-        request.churlish = outdata
+        outdata = URLData(perfect=perfect, imperfect=imperfect,
+                          all=all_urls, path=request.path)
         return outdata
 
     def get_exclusions(self):
@@ -63,9 +58,16 @@ class RequestURL(object):
             admin_root = reverse_lazy('admin:index')
         except NoReverseMatch:
             admin_root = None
-        static_root = getattr(settings, 'STATIC_URL', None)
-        media_root = getattr(settings, 'MEDIA_URL', None)
-        for exclude in (admin_root, static_root, media_root):
+
+        might_need_excluding = (
+            getattr(settings, 'STATIC_URL', None),
+            getattr(settings, 'MEDIA_URL', None),
+            '/favicon.ico$',
+            admin_root,
+            '__debug__/',
+            'debug_toolbar/',
+        )
+        for exclude in might_need_excluding:
             if exclude:
                 yield r'^{exclude!s}'.format(exclude=exclude)
         for configured_exclude in getattr(settings, 'CHURLISH_EXCLUDES', ()):
@@ -76,82 +78,35 @@ class RequestURL(object):
     def compiled_exclusions(self):
         return tuple(re.compile(x, re.VERBOSE) for x in self.get_exclusions())
 
-    def is_excluded(self, request):
+    def request_is_excluded(self, request):
         for exclusion in self.compiled_exclusions:
             if exclusion.search(request.path):
                 return True
         return False
 
-
-class IsVisible(RequestURL):
-    """
-    Allows for '/a/b/c/' to be hidden only when it is explicitly marked
-    as unpublished
-    """
-    def get_object(self, request):
-        raise NotImplementedError
-
+class ChurlishMiddleware(object):
+    __slots__ = ('handler',)
+    def __init__(self):
+        self.handler = RequestURL()
+    
     def process_request(self, request):
-        if self.is_excluded():
-            return None
-        url = self.get_object()
-        if url is None:
+        if self.handler.request_is_excluded(request=request):
             return None  # no match, so continue with other middlewares
-        return self.handle_unpublished(url=url, request=request)
-
-    def handle_unpublished(self, url, request):
-        if not url.is_pubished:
-            msg = ("URL (pk: {url}) has publishing information (pk: {vis}) "
-                   "which prevents it from being displayed now "
-                   "({now})".format(url=url.url_id, vis=url.pk, now=now()))
-            logger.error(msg, extra={'request': request, 'status_code': 404})
-            raise Http404("URL is marked as unpublished explicitly")
-        return None
-
-
-class IsPerfectURLVisible(IsVisible):
-    def get_object(self, request):
-        url = self.get_or_set_url(request=request).perfect
-        if url is None:
-            return
+        request.churlish = self.handler.get_url_data(request=request)
+        if len(request.churlish.all) < 1:
+            return None   # no match, so continue with other middlewares
+        from django.contrib import admin
         try:
-            return url.urlvisible
-        except URLVisible.DoesNotExist:
+            urladmin = admin.site._registry[URL]
+        except KeyError:
+            # Not mounted into the admin, so we can't figure out which
+            # relations might affect the URL instances.
             return None
-
-
-class IsImperfectURLVisible(IsVisible):
-    """
-    Allows for '/a/b/c/' to be hidden because '/a/b/' is marked as not
-    published
-    """
-    def get_object(self, request):
-        url = self.get_or_set_url(request=request).imperfect
-        if url is None:
-            return None
-        url = URL(path=request.path)
-        url.full_clean()
-        possibilities = url.get_path_ancestry(include_self=True)
-        best_url = (URLVisible.objects.filter(url__path__in=possibilities)
-                    .order_by('-url__path').first())
-        return best_url
-
-
-class NeedsRedirecting(RequestURL):
-    def get_object(self, request):
-        url = self.get_or_set_url(request=request).imperfect
-        try:
-            return url.urlredirect
-        except URLRedirect.DoesNotExist:
-            return None
-
-    def process_request(self, request):
-        if self.is_excluded():
-            return None
-        obj = self.get_object(request=request)
-        if obj is not None:
-            location = obj.get_absolute_url()
-            if obj.is_permanent:
-                return HttpResponsePermanentRedirect(location)
-            return HttpResponseRedirect(location)
-        return None
+        import pdb; pdb.set_trace()
+        bound_mws = urladmin.get_middlewares()
+        bitset = []
+        for url in request.churlish.all:
+            for mw in bound_mws:
+                bitset.append(
+                    mw.has_object_permission(request=request, obj=url, view=None))
+        print(bitset)
