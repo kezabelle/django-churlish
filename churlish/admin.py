@@ -12,7 +12,7 @@ from .models import (URL, URLRedirect, URLVisible, SimpleAccessRestriction,
                      GroupAccessRestriction, UserAccessRestriction)
 from .admin_filters import (RedirectFilter, AccessFilter, PublishedFilter,
                             GroupFilter, UserFilter)
-
+from .middleware_filters import UserRoleRequired, UserRequired
 
 class URLInline(admin.StackedInline):
     extra = 0
@@ -21,10 +21,6 @@ class URLInline(admin.StackedInline):
         func = partial(self.get_urladmin_display, relation_name=relation_name)
         func2 = update_wrapper(func, self.get_urladmin_display)
         return func2
-
-    def get_urladmin_display(self, obj, relation_name):
-        raise NotImplementedError
-
 
 
 class RedirectInline(URLInline):
@@ -44,7 +40,9 @@ class RedirectInline(URLInline):
 
     def get_urladmin_filter_cls(self, *args, **kwargs):
         return RedirectFilter
-
+    
+    def get_churlish_middlewares(self):
+        return ()
 
 class VisibleInline(URLInline):
     model = URLVisible
@@ -68,6 +66,9 @@ class VisibleInline(URLInline):
 
     def get_urladmin_filter_cls(self, *args, **kwargs):
         return PublishedFilter
+    
+    def get_churlish_middlewares(self):
+        return ()
 
 
 class SimpleAccessInline(URLInline):
@@ -87,6 +88,9 @@ class SimpleAccessInline(URLInline):
     def get_urladmin_filter_cls(self, *args, **kwargs):
         return AccessFilter
 
+    def get_churlish_middlewares(self):
+        return (UserRoleRequired,)
+
 
 class GroupAccessInline(URLInline):
     model = GroupAccessRestriction
@@ -101,7 +105,9 @@ class GroupAccessInline(URLInline):
 
     def get_urladmin_filter_cls(self, *args, **kwargs):
         return GroupFilter
-
+    
+    def get_churlish_middlewares(self):
+        return ()
 
 class UserAccessInline(URLInline):
     model = UserAccessRestriction
@@ -117,10 +123,13 @@ class UserAccessInline(URLInline):
     def get_urladmin_filter_cls(self, *args, **kwargs):
         return UserFilter
 
+    def get_churlish_middlewares(self):
+        return (UserRequired,)
 
 class URLAdmin(admin.ModelAdmin):
     list_display = ['path']
     list_display_links = ['path']
+    date_hierarchy = 'modified'
     actions = None
     search_fields = ['^path']
     ordering = ('-modified',)
@@ -154,6 +163,21 @@ class URLAdmin(admin.ModelAdmin):
                               if inline is not None and relation is not None)
         return models_and_inlines
 
+    def get_middleware_classes(self):
+        relations_and_inlines = self.get_runtime_relations_and_inlines()
+        for inline, model, ignored in relations_and_inlines:
+            if hasattr(inline, 'get_churlish_middlewares'):
+                proper_inline = inline(model, self.admin_site)
+                for mw in proper_inline.get_churlish_middlewares():
+                    yield mw
+            if hasattr(model, 'get_churlish_middlewares'):
+                proper_model = model()
+                for mw in proper_model.get_churlish_middlewares():
+                    yield mw 
+    
+    def get_middlewares(self):
+        return tuple(x() for x in self.get_middleware_classes())
+    
     def get_queryset(self, *args, **kwargs):
         relations = tuple(self.get_runtime_relations())
         qs = super(URLAdmin, self).get_queryset(*args, **kwargs)
