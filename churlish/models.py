@@ -21,6 +21,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 PATH_SEP = '/'
 DJANGO_VERSION = VERSION[0:3]
+BOOL_CHOICES = ((True, _('Yes')), (False, _('No')))
 publish_label = _("publishing date")
 publish_help = _("the date and time on which this object should be visible on "
                  "the website.")
@@ -69,12 +70,20 @@ class URL(TimeStampedModel):
         return self.get_depth()
 
     def get_ancestors(self, include_self=False):
+        """
+        Returns the nearest ancestors first, such that:
+            /a/b/c/
+        would return
+        (/a/b/c/, /a/b/, /a/, /)
+        Allowing for naive iteration over them.
+        """
+        manager = self.__class__.objects
         if self.is_root():
-            return self.__class__.objects.none()
+            return manager.none()
         parent_urls = tuple(self.get_path_ancestry(include_self=include_self))
         if not parent_urls:
-            return self.__class__.objects.none()
-        return self.__class__.objects.filter(path__in=parent_urls)
+            return manager.none()
+        return manager.filter(path__in=parent_urls)
 
     def get_ancestor_count(self):
         return self.get_ancestors().count()
