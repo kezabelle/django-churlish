@@ -64,8 +64,8 @@ class RequestURL(object):
             getattr(settings, 'MEDIA_URL', None),
             '/favicon.ico$',
             admin_root,
-            '__debug__/',
-            'debug_toolbar/',
+            '/__debug__/',
+            '/debug_toolbar/',
         )
         for exclude in might_need_excluding:
             if exclude:
@@ -102,11 +102,21 @@ class ChurlishMiddleware(object):
             # Not mounted into the admin, so we can't figure out which
             # relations might affect the URL instances.
             return None
-        import pdb; pdb.set_trace()
+
         bound_mws = urladmin.get_middlewares()
+        bound_urls = request.churlish.all
         bitset = []
-        for url in request.churlish.all:
+        for url in bound_urls:
             for mw in bound_mws:
-                bitset.append(
-                    mw.has_object_permission(request=request, obj=url, view=None))
-        print(bitset)
+                ok = mw.has_object_permission(request=request, obj=url, view=None)
+                if not ok and hasattr(mw, 'error'):
+                    bitset.append(ok)
+                    mw.error(request=request, obj=url)
+                elif ok and hasattr(mw, 'response'):
+                    return mw.response(request=request, obj=url)
+        
+        # we should only hit this condition if a test failed, but didn't try
+        # to handle it's business by implemementing .error()
+        if not all(bitset):
+            raise Http404("Request failed tests for this URL")
+

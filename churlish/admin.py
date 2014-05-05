@@ -12,7 +12,8 @@ from .models import (URL, URLRedirect, URLVisible, SimpleAccessRestriction,
                      GroupAccessRestriction, UserAccessRestriction)
 from .admin_filters import (RedirectFilter, AccessFilter, PublishedFilter,
                             GroupFilter, UserFilter)
-from .middleware_filters import UserRoleRequired, UserRequired
+from .middleware_filters import (UserRoleRequired, UserRequired, GroupRequired,
+                                 RedirectRequired, PublishedRequired)
 
 class URLInline(admin.StackedInline):
     extra = 0
@@ -42,7 +43,7 @@ class RedirectInline(URLInline):
         return RedirectFilter
     
     def get_churlish_middlewares(self):
-        return ()
+        return (RedirectRequired,)
 
 class VisibleInline(URLInline):
     model = URLVisible
@@ -68,7 +69,7 @@ class VisibleInline(URLInline):
         return PublishedFilter
     
     def get_churlish_middlewares(self):
-        return ()
+        return (PublishedRequired,)
 
 
 class SimpleAccessInline(URLInline):
@@ -107,7 +108,7 @@ class GroupAccessInline(URLInline):
         return GroupFilter
     
     def get_churlish_middlewares(self):
-        return ()
+        return (GroupRequired,)
 
 class UserAccessInline(URLInline):
     model = UserAccessRestriction
@@ -133,8 +134,8 @@ class URLAdmin(admin.ModelAdmin):
     actions = None
     search_fields = ['^path']
     ordering = ('-modified',)
-    inlines = [VisibleInline, SimpleAccessInline, GroupAccessInline,
-               UserAccessInline, RedirectInline]
+    inlines = [VisibleInline, RedirectInline, SimpleAccessInline,
+               GroupAccessInline, UserAccessInline]
 
     def get_runtime_relations(self):
         """
