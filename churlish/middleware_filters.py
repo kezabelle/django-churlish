@@ -32,7 +32,7 @@ class UserRoleRequired(object):
             access_required = obj.simpleaccessrestriction
         except ObjectDoesNotExist:
             # no restriction exists, so it's true for now.
-            return True
+            return None
         
         final = []
         if access_required.is_authenticated:
@@ -44,7 +44,7 @@ class UserRoleRequired(object):
             final.append(IsAdmin().has_object_permission(request, obj, None))
         return all(final)
 
-    def error(self, request, obj):
+    def error(self, request, obj, view):
         msg = ("You don't have access to this URL resource, because {} "
                "prevented it".format(obj.path))
         raise Http404(msg)
@@ -56,11 +56,11 @@ class UserRequired(object):
         users = obj.useraccessrestriction_set.values_list('user_id', flat=True)
         distinct_users = frozenset(users)
         if not distinct_users:
-            return True
+            return None
         not_anonymous = IsAuthenticated().has_object_permission(request, obj, None)
         return not_anonymous and request.user.pk in distinct_users
 
-    def error(self, request, obj):
+    def error(self, request, obj, view):
         msg = ("You don't have access to this URL resource, because {} "
                "prevented it".format(obj.path))
         raise Http404(msg)
@@ -72,7 +72,7 @@ class GroupRequired(object):
         grps = obj.groupaccessrestriction_set.values_list('group_id', flat=True)
         distinct_groups = frozenset(grps)
         if not distinct_groups:
-            return True
+            return None
         is_auth = IsAuthenticated().has_object_permission(request, obj, None)
         if not is_auth:
             return False
@@ -80,7 +80,7 @@ class GroupRequired(object):
         intersection = grps & user_groups
         return len(intersection) > 0
 
-    def error(self, request, obj):
+    def error(self, request, obj, view):
         raise Http404("You don't have access to this URL resource "
                       "because of your groups")
 
@@ -89,12 +89,12 @@ class RedirectRequired(object):
     def has_object_permission(self, request, obj, view):
         try:
             target = obj.urlredirect
+            # True + success() means it'll get redirected.
             return True
         except ObjectDoesNotExist:
-            # no redirect exists, so it's ... maybe bad? IDK.
-            return False
+            return None
 
-    def response(self, request, obj):
+    def success(self, request, obj, view):
         return redirect(obj.urlredirect.get_absolute_url())
 
 
@@ -105,8 +105,8 @@ class PublishedRequired(object):
             publishing_status = obj.urlvisible
         except ObjectDoesNotExist:
             # implicitly published because no URL prevents it.
-            return True
+            return None
         return publishing_status.is_published # exists, may be published.
     
-    def error(self, request, obj):
+    def error(self, request, obj, view):
         raise Http404("This URL is not published")

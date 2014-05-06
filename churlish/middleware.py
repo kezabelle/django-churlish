@@ -1,6 +1,7 @@
 import re
 import logging
 from collections import namedtuple
+from itertools import product
 from django.conf import settings
 from django.utils.functional import cached_property
 from django.http import (Http404, HttpResponseRedirect,
@@ -85,38 +86,78 @@ class RequestURL(object):
         return False
 
 class ChurlishMiddleware(object):
-    __slots__ = ('handler',)
-    def __init__(self):
-        self.handler = RequestURL()
-    
-    def process_request(self, request):
-        if self.handler.request_is_excluded(request=request):
+    __slots__ = ()
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        url_handler = RequestURL()
+        logextra = {'request': request}
+        logcls = self.__class__.__name__
+        if url_handler.request_is_excluded(request=request):
+            logger.debug("Skipping {cls!s} for this request as it matches "
+                         "a configured exclusion".format(cls=logcls),
+                         extra=logextra)
             return None  # no match, so continue with other middlewares
-        request.churlish = self.handler.get_url_data(request=request)
+        request.churlish = url_handler.get_url_data(request=request)
         if len(request.churlish.all) < 1:
+            logger.debug("Skipping {cls!s} for this request because no URLs "
+                         "match any path components".format(cls=logcls),
+                         extra=logextra)
             return None   # no match, so continue with other middlewares
+
         from django.contrib import admin
         try:
             urladmin = admin.site._registry[URL]
         except KeyError:
             # Not mounted into the admin, so we can't figure out which
             # relations might affect the URL instances.
+            logger.error("Unable to use ChurlishMiddleware because the"
+                         "the admin site doesn't have a URL Modeladmin "
+                         "instance", exc_info=1, extra=logextra)
             return None
 
-        bound_mws = urladmin.get_middlewares()
+        try:
+            bound_mws = urladmin.get_middlewares()
+        except AttributeError:
+            logger.error("Unable to use ChurlishMiddleware because the "
+                         "admin site doesn't implement the `get_middlewares`"
+                         "method", exc_info=1, extra=logextra)
+            return None
+
         bound_urls = request.churlish.all
-        bitset = []
-        for url in bound_urls:
-            for mw in bound_mws:
-                ok = mw.has_object_permission(request=request, obj=url, view=None)
-                if not ok and hasattr(mw, 'error'):
-                    bitset.append(ok)
-                    mw.error(request=request, obj=url)
-                elif ok and hasattr(mw, 'response'):
-                    return mw.response(request=request, obj=url)
+        urls_and_mws = product(bound_urls, bound_mws)
+        errors = []
+        for url, mw in urls_and_mws:
+            logger.debug("Running {cls!s} against {url!s}".format(
+                cls=mw.__class__.__name__, url=url.path), extra=logextra)
+            status = mw.has_object_permission(request=request, obj=url,
+                                              view=view_func)
+            if status is None:
+                logger.debug("{cls!s} is not applicable for {url!s}".format(
+                    cls=mw.__class__.__name__, url=url.path), extra=logextra)
+                continue
+            
+            if status is True and hasattr(mw, 'success'):
+                response = mw.success(request=request, obj=url, view=view_func)
+                if response is not None:
+                    logger.debug("{cls!s} forced {url!s} to return".format(
+                        cls=mw.__class__.__name__, url=url.path),
+                        extra=logextra)
+                    return response
+            elif status is False and hasattr(mw, 'error'):
+                errors.append(1)
+                response = mw.error(request=request, obj=url, view=view_func)
+                if response is not None:
+                    logger.debug("{cls!s} forced {url!s} to return".format(
+                        cls=mw.__class__.__name__, url=url.path),
+                        extra=logextra)
+                    return response
         
         # we should only hit this condition if a test failed, but didn't try
-        # to handle it's business by implemementing .error()
-        if not all(bitset):
+        # to handle it's business by implemementing .error() as a response
+        # or an exception.
+        if sum(errors) > 0:
+            logger.warning("One of the ChurlishMiddleware partials said the "
+                           "request should fail, but did not opt to handle "
+                           " the response.", extra=logextra)
             raise Http404("Request failed tests for this URL")
 
