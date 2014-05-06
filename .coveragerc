@@ -1,0 +1,4 @@
+[run]
+source = churlish
+omit = churlish/tests/*
+branch = 1

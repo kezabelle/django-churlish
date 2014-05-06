@@ -44,6 +44,9 @@ class URL(TimeStampedModel):
     def __str__(self):
         return self.path
 
+    def __repr__(self):
+        return self.path
+
     def clean(self):
         self.path = self.path.strip()
         if self.path and not self.path.startswith(PATH_SEP):
