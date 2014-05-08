@@ -12,9 +12,9 @@ applied to a request based on the ``request.path``.
 Provides partials out-of-the-box for:
 
 * Marking a URL (and it's descendants) as unpublished.
-* Marking a URL (and it's descendants) as a redirect, before the view itself 
+* Marking a URL (and it's descendants) as a redirect, before the view itself
   is called, rather than after as with ``django.contrib.redirects``
-* Marking a URL (and it's descendants) as requiring login, or staff, 
+* Marking a URL (and it's descendants) as requiring login, or staff,
   or superuser status.
 * Marking a URL (and it's descendants) as only available for specific users.
 * Marking a URL (and it's descendants) as only available for specific groups.
@@ -22,13 +22,13 @@ Provides partials out-of-the-box for:
 Partials explanation
 --------------------
 
-Conceptually, the middleware partials are somewhat like 
+Conceptually, the middleware partials are somewhat like
 `Django REST Framework's`_ concept of `Permission classes`_, and share
 the same naming nomenclature. A valid middleware partial looks like::
 
     class LetAnyoneIn(object):
         __slots__ = ()
-        def has_object_permission(self, request, view, obj):
+        def test(self, request, view, obj):
             return True
 
 .. _Django REST Framework's: http://www.django-rest-framework.org/
@@ -40,19 +40,19 @@ may be raised::
 
     class NotQuiteAnyone(object):
         __slots__ = ()
-        def has_object_permission(self, request, view, obj):
+        def test(self, request, view, obj):
             return request.user.pk == 1
-        
+
         def error(self, request, view, obj):
             raise PermissionDenied("Nope")
 
         def success(self, request, view, obj):
             return HttpResponse("Yay, you're User 1!")
 
-If enabled, the above middleware partial would cause an intentional error for 
+If enabled, the above middleware partial would cause an intentional error for
 almost everyone.
 
-Additionally, ``has_object_permission`` may return ``None`` to indicate that
+Additionally, ``test`` may return ``None`` to indicate that
 the partial middleware wasn't applicable.
 
 That "obj" argument
@@ -70,15 +70,15 @@ of the partial middleware would be::
 
     class UnfinishedAuth(object):
         __slots__ = ()
-        def has_object_permission(self, request, view, obj):
+        def test(self, request, view, obj):
             try:
                 relation = obj.simpleaccessrestriction
             except ObjectDoesNotExist:
-                # means the partial middleware is not applicable because 
+                # means the partial middleware is not applicable because
                 # no configuration exists. Returning False here would indicate
                 # that in the absence of configuration, *no-one* can access
                 # the URL!
-                return None  
+                return None
             # and now the rest of the permissions test!
 
 
@@ -99,7 +99,7 @@ Certain URL patterns are hardwired to be ignored, namely:
 * the admin site, if set.
 * anything under ``MEDIA_URL``
 * anything under ``STATIC_URL``
-* django-debug-toolbar 
+* django-debug-toolbar
 
-Additional exclusions may be provided by setting ``CHURLISH_EXCLUDES`` to 
+Additional exclusions may be provided by setting ``CHURLISH_EXCLUDES`` to
 an iterable of regular expressions to match the ``request.path`` against.

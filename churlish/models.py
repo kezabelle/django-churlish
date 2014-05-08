@@ -39,7 +39,8 @@ class URL(TimeStampedModel):
     """
     This implements much of the django-treebeard model API
     """
-    path = models.CharField(max_length=2048)
+    site = models.ForeignKey('sites.Site', null=False)
+    path = models.CharField(max_length=2048, null=False, blank=False)
 
     def __str__(self):
         return self.path
@@ -82,6 +83,8 @@ class URL(TimeStampedModel):
         """
         manager = self.__class__.objects
         if self.is_root():
+            if include_self is True:
+                return self.__class__.get_root_nodes()
             return manager.none()
         parent_urls = tuple(self.get_path_ancestry(include_self=include_self))
         if not parent_urls:
@@ -211,6 +214,7 @@ class URL(TimeStampedModel):
         verbose_name = _("URL")
         verbose_name_plural = _("URLs")
         db_table = 'churlish_url'
+        unique_together = (('site', 'path'),)
 
 
 def validate_redirect_target(value):
@@ -248,7 +252,7 @@ class URLRedirect(TimeStampedModel):
     class Meta:
         verbose_name = _("Redirect")
         verbose_name_plural = _("Redirects")
-        db_table = "churlish_urlredirect"
+        db_table = "churlish_url_redirect"
 
 
 @python_2_unicode_compatible
@@ -299,7 +303,7 @@ class URLVisible(TimeStampedModel):
     class Meta:
         verbose_name = _("Visibility")
         verbose_name_plural = _("Visibility")
-        db_table = 'churlish_urlvisible'
+        db_table = 'churlish_url_visibility'
 
 
 @python_2_unicode_compatible
