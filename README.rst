@@ -6,6 +6,12 @@ A URLish way to handle enabling or locking down certain things.
 
 Based around the idea that a URL represents, ideally, a namespace of children.
 
+If you've ever wanted to be able to do something like::
+
+    url('xyz/', login_required(include('my.urlconf')))
+
+easily, or in a dynamic way, this might be interesting.
+
 Provides a single Django Middleware, with which *partial* middlewares may be
 applied to a request based on the ``request.path``.
 
