@@ -29,8 +29,8 @@ Partials explanation
 --------------------
 
 Conceptually, the middleware partials are somewhat like
-`Django REST Framework's`_ concept of `Permission classes`_, and share
-the same naming nomenclature. A valid middleware partial looks like::
+`Django REST Framework's`_ concept of `Permission classes`_. A valid middleware 
+partial looks like::
 
     class LetAnyoneIn(object):
         __slots__ = ()
