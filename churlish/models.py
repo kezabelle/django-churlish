@@ -315,6 +315,11 @@ class SimpleAccessRestriction(TimeStampedModel):
     is_superuser = models.BooleanField(default=False,
                                        verbose_name=_("Only administrators"))
 
+    def __str__(self):
+        if self.has_restriction():
+            return 'has restriction'
+        return 'has no restrictions'
+
     def has_restriction(self):
         return self.is_authenticated or self.is_staff or self.is_superuser
 
@@ -327,6 +332,9 @@ class GroupAccessRestriction(TimeStampedModel):
     url = models.ForeignKey('churlish.URL')
     group = models.ForeignKey('auth.Group')
 
+    def __str__(self):
+        return 'restricted to {}'.format(self.group.name)
+
     class Meta:
         db_table = 'churlish_url_accessgroup'
 
@@ -335,6 +343,9 @@ class GroupAccessRestriction(TimeStampedModel):
 class UserAccessRestriction(TimeStampedModel):
     url = models.ForeignKey('churlish.URL')
     user = models.ForeignKey(getattr(settings, 'AUTH_USER_MODEL', 'auth.User'))
+
+    def __str__(self):
+        return 'restricted to {}'.format(self.user.get_short_name())
 
     class Meta:
         db_table = 'churlish_url_accessuser'
