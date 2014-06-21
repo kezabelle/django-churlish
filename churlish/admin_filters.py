@@ -102,7 +102,6 @@ class GroupFilter(SimpleListFilter):
     parameter_name = '_group_pk'
 
     def lookups(self, request, model_admin):
-        import pdb; pdb.set_trace()
         group_cls = GroupAccessRestriction.group.field.rel.to
         return tuple((x.pk, x.name) for x in group_cls.objects.all().iterator())
 
@@ -122,13 +121,20 @@ class UserFilter(SimpleListFilter):
 
     def lookups(self, request, model_admin):
         user_cls = UserAccessRestriction.user.field.rel.to
-        for x in user_cls.objects.all().iterator():
-            name = x.get_short_name().strip()
-            if not name:
-                name = x.get_full_name().strip()
-            if not name:
-                name = x.get_username().strip()
-            yield (x.pk, name)
+        for user in user_cls.objects.all().iterator():
+            if hasattr(user, 'get_full_name'):
+                full_name = user.get_full_name().strip()
+            if hasattr(user, 'get_short_name'):
+                short_name = user.get_short_name().strip()
+            if hasattr(user, 'get_username'):
+                user_name = user.get_username().strip()
+            name = user
+            try:
+                final_name = next(x
+                    for x in (full_name, short_name, user_name, name) if x)
+            except StopIteration:
+                final_name = '<Unknown>'
+            yield (user.pk, final_name)
 
     def queryset(self, request, queryset):
         if self.parameter_name in self.used_parameters:
