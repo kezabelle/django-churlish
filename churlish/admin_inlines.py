@@ -69,7 +69,7 @@ class SimpleAccessInline(URLInline):
 
         related_instance = getattr(obj, relation_name, None)
         if related_instance is None:
-            return True
+            return False
         return related_instance.has_restriction()
     get_urladmin_display.short_description = _("Login Restricted")
     get_urladmin_display.boolean = True
