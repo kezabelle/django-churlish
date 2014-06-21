@@ -24,10 +24,7 @@ class RedirectInline(URLInline):
     max_num = 1
 
     def get_urladmin_display(self, obj, relation_name):
-        try:
-            related_instance = getattr(obj, relation_name, None)
-        except ObjectDoesNotExist:
-            related_instance = None
+        related_instance = getattr(obj, relation_name, None)
         if related_instance is None:
             return False
         return len(related_instance.get_absolute_url()) > 0
@@ -50,10 +47,7 @@ class VisibleInline(URLInline):
         This one is inverted, so that "is published" is ticked when
         nothing is there
         """
-        try:
-            related_instance = getattr(obj, relation_name, None)
-        except ObjectDoesNotExist:
-            related_instance = None
+        related_instance = getattr(obj, relation_name, None)
         if related_instance is None:
             return True
         return related_instance.is_published
@@ -72,11 +66,10 @@ class SimpleAccessInline(URLInline):
     extra = 1
 
     def get_urladmin_display(self, obj, relation_name):
-        try:
-            related_instance = getattr(obj, relation_name, None)
-        except ObjectDoesNotExist:
-            related_instance = None
-            return False
+
+        related_instance = getattr(obj, relation_name, None)
+        if related_instance is None:
+            return True
         return related_instance.has_restriction()
     get_urladmin_display.short_description = _("Login Restricted")
     get_urladmin_display.boolean = True
